@@ -483,13 +483,13 @@ ParallelRegion::AddParallelLoopMetadata(
     BasicBlock* bb = *i;      
     for (BasicBlock::iterator ii = bb->begin(), ee = bb->end();
          ii != ee; ii++) {
-      if (!ii->mayReadOrWriteMemory()) {
-        continue;
-      }
+      //if (!ii->mayReadOrWriteMemory()) {
+        //continue;
+      //}
 
-      if (ii->mayReadFromMemory() && !IsLoadUnconditionallySafe(&*ii)) {
-        continue;
-      }
+      //if (ii->mayReadFromMemory() && !IsLoadUnconditionallySafe(&*ii)) {
+        //continue;
+      //}
 
       MDNode *NewMD = MDNode::get(bb->getContext(), Identifier);
       MDNode *OldMD = ii->getMetadata(PARALLEL_MD_NAME);
