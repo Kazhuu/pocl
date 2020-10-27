@@ -34,6 +34,11 @@ endif()
 
 include_directories(AFTER "devices" "." "../llvmopencl")
 
+if (POCL_ENABLE_RV)
+  add_compile_definitions(POCL_ENABLE_RV)
+endif()
+
+
 ################################################################################
 if (MSVC)
   set(POCL_PUBLIC_LINK_LIST ${Pthreads_LIBRARIES} ${LTTNG_UST_LDFLAGS})

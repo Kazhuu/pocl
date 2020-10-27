@@ -34,6 +34,7 @@
 #include <map>
 #include <vector>
 #include <iostream>
+#include <sstream>
 
 #include "CompilerWarnings.h"
 IGNORE_COMPILER_WARNING("-Wunused-parameter")
@@ -61,6 +62,10 @@ IGNORE_COMPILER_WARNING("-Wunused-parameter")
 #include <llvm/Analysis/TargetLibraryInfo.h>
 #include <llvm/Analysis/TargetTransformInfo.h>
 #include <llvm/IR/LegacyPassManager.h>
+
+#ifdef POCL_ENABLE_RV
+#include "rv/passes.h"
+#endif
 
 #define PassManager legacy::PassManager
 
@@ -260,7 +265,7 @@ kernel_compiler_passes(cl_device_id device, llvm::Module *input,
     passes.push_back("wi-aa");
     passes.push_back("workitemrepl");
     //passes.push_back("print-module");
-    passes.push_back("workitemloops");
+    passes.push_back("workitemloops"); // FIXME run RV here!
     // Remove the (pseudo) barriers.   They have no use anymore due to the
     // work-item loop control taking care of them.
     passes.push_back("remove-barriers");
@@ -292,6 +297,11 @@ kernel_compiler_passes(cl_device_id device, llvm::Module *input,
 #endif
 
   passes.push_back("STANDARD_OPTS");
+#ifdef POCL_ENABLE_RV
+  if (currentWgMethod == "rv") {
+    passes.push_back("RV");
+  }
+#endif
 
   // Due to unfortunate phase-ordering problems with store sinking,
   // loop deletion does not always apply when executing -O3 only
@@ -313,9 +323,15 @@ kernel_compiler_passes(cl_device_id device, llvm::Module *input,
       // devices do not want to vectorize intra work-item at this
       // stage.
       if (currentWgMethod == "loopvec" && !SPMDDevice) {
+        Builder.DisableUnrollLoops = true;
         Builder.LoopVectorize = true;
         Builder.SLPVectorize = true;
+#ifdef POCL_ENABLE_RV
+      } else if (currentWgMethod == "rv") {
         Builder.DisableUnrollLoops = true;
+        Builder.LoopVectorize = false;
+        Builder.SLPVectorize = true;
+#endif
       } else {
         Builder.LoopVectorize = false;
         Builder.SLPVectorize = false;
@@ -323,6 +339,12 @@ kernel_compiler_passes(cl_device_id device, llvm::Module *input,
       Builder.VerifyInput = true;
       Builder.VerifyOutput = true;
       Builder.populateModulePassManager(*Passes);
+      continue;
+    } else if (passes[i] == "RV") {
+      rv::addPreparatoryPasses(*Passes);
+      rv::addOuterLoopVectorizer(*Passes);
+      rv::addCleanupPasses(*Passes);
+      // passes.push_back("rv-loop-vectorize");
       continue;
     }
     if (passes[i] == "automatic-locals") {
@@ -449,6 +471,18 @@ int pocl_llvm_generate_workgroup_function_nowrite(
   // Print loop vectorizer remarks if enabled.
   if (pocl_get_bool_option("POCL_VECTORIZER_REMARKS", 0) == 1) {
     std::cout << getDiagString();
+  }
+  llvm::Error Err = ParallelBC->materializeAll();
+  if (Err) {
+    std::cerr << "POCL: Could not materialize WG module!\n";
+  }
+  if (getenv("POCL_DUMP_WG")) {
+    std::stringstream ss;
+    ss << getenv("POCL_DUMP_WG");
+    // ss << "/pocl_wg_kernel.ll";
+    std::error_code EC;
+    llvm::raw_fd_ostream Out(ss.str(), EC);
+    ParallelBC->print(Out, nullptr);
   }
 
   assert(Output != NULL);

@@ -304,7 +304,11 @@ void InitializeLLVM() {
 
   llvm::cl::Option *O = nullptr;
 
+#ifdef POCL_ENABLE_RV
+  currentWgMethod = pocl_get_string_option("POCL_WORK_GROUP_METHOD", "rv");
+#else
   currentWgMethod = pocl_get_string_option("POCL_WORK_GROUP_METHOD", "loopvec");
+#endif
 
   if (currentWgMethod == "loopvec") {
 

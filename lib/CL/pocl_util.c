@@ -284,6 +284,10 @@ pocl_aligned_malloc (size_t alignment, size_t size)
       return NULL;
     }
 
+  if (!getenv("POCL_ZERO_BUFFERS")) {
+    memset(result, 0, size);
+  }
+
   return result;
 
 #else

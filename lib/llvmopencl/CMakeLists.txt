@@ -95,6 +95,10 @@ if(MSVC)
   set_source_files_properties( ${LLVMPASSES_SOURCES} PROPERTIES LANGUAGE CXX )
 endif(MSVC)
 
+if (POCL_ENABLE_RV)
+  add_compile_definitions(POCL_ENABLE_RV)
+endif()
+
 # This library (just a bunch of objects really) is linked against libpocl
 # to call the kernel compiler passes directly from the host library.
 #noinst_LTLIBRARIES = libllvmpasses.la

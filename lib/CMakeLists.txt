@@ -46,6 +46,9 @@ set(CPACK_DEBIAN_LIB_PACKAGE_RECOMMENDS "pocl-opencl-icd")
 set(CPACK_DEBIAN_LIB_PACKAGE_BREAKS "libpocl1-common (<< 0.13-9)")
 set(CPACK_DEBIAN_LIB_PACKAGE_REPLACES "libpocl1-common (<< 0.13-9)")
  
+if (RV_ENABLE_POCL)
+  add_compile_definitions(POCL_ENABLE_RV)
+endif()
 
 if (OCS_AVAILABLE)
   add_subdirectory("kernel")

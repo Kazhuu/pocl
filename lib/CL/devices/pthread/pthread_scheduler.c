@@ -31,6 +31,8 @@
 #include <string.h>
 #include <time.h>
 #include <unistd.h>
+#include <stdlib.h>
+#include <stdio.h>
 
 #include "pocl-pthread_scheduler.h"
 #include "pocl_cl.h"
@@ -451,6 +453,9 @@ RETRY:
       ++run_cmd->ref_count;
       POCL_FAST_UNLOCK (scheduler.wq_lock_fast);
 
+      clock_t StartRun = clock();
+      const char* KernelName = run_cmd->kernel->name;
+
       work_group_scheduler (run_cmd, td);
 
       POCL_FAST_LOCK (scheduler.wq_lock_fast);
@@ -460,6 +465,20 @@ RETRY:
           finalize_kernel_command (td, run_cmd);
           POCL_FAST_LOCK (scheduler.wq_lock_fast);
         }
+      clock_t EndRun = clock();
+
+      const char* RTDump = getenv("POCL_APPEND_TIMES");
+      if (RTDump) {
+        FILE* out = fopen(RTDump, "a");
+
+
+        // convert 123 to string [buf]
+        uint64_t Delta = EndRun - StartRun;
+        char LineBuff[512];
+        sprintf(LineBuff, "%s %lu\n", KernelName, Delta);
+        fputs(LineBuff, out);
+        fclose(out);
+      }
     }
 
   /* execute a command if available */
