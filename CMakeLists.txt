@@ -199,6 +199,8 @@ option(ENABLE_HOST_CPU_DEVICE_CL20 "Enable reporting OpenCL 2.0 for the CPU devi
 
 option(ENABLE_ACCEL_DEVICE "Enable the generic hardware accelerator device driver." OFF)
 
+option(ENABLE_TBB_DEVICE "Enable the Intel TBB device driver." OFF)
+
 ####
 
 # currently only works with gcc as host compiler
@@ -403,9 +405,10 @@ else()
 
 endif()
 
-
-
-
+if(ENABLE_TBB_DEVICE)
+  # related documentation: https://github.com/oneapi-src/oneTBB/tree/tbb_2020/cmake#binary-package-integration
+  find_package(TBB REQUIRED tbb)
+endif()
 
 ######################################################################################
 
@@ -1101,10 +1104,16 @@ if(ENABLE_ACCEL_DEVICE)
   set(OCL_DRIVERS "${OCL_DRIVERS} accel")
 endif()
 
+# The tbb device is implemented in C++ and requires the Intel TBB library.
+if(ENABLE_TBB_DEVICE)
+  set(BUILD_BASIC 1)
+  set(BUILD_TBB 1)
+  set(OCL_DRIVERS "${OCL_DRIVERS} tbb")
+endif()
+
 if(DEFINED EXTRA_OCL_TARGETS)
   set(OCL_TARGETS "${OCL_TARGETS} ${EXTRA_OCL_TARGETS}")
 endif()
-
 
 ####################################################################
 

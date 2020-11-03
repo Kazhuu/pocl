@@ -39,14 +39,17 @@ if(BUILD_PTHREAD)
   add_subdirectory("pthread")
 endif()
 
+if(BUILD_TBB)
+  add_subdirectory("tbb")
+endif()
+
 if(BUILD_ACCEL)
   add_subdirectory("accel")
 endif()
 
 add_subdirectory("topology")
 
-set(POCL_DEVICES_OBJS "$<TARGET_OBJECTS:pocl-devices>"
-  "$<TARGET_OBJECTS:pocl-devices-topology>")
+set(POCL_DEVICES_OBJS "$<TARGET_OBJECTS:pocl-devices>" "$<TARGET_OBJECTS:pocl-devices-topology>")
 
 if(ENABLE_TCE)
   include_directories(AFTER "tce")
