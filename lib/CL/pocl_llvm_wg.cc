@@ -315,6 +315,7 @@ kernel_compiler_passes(cl_device_id device, llvm::Module *input,
       if (currentWgMethod == "loopvec" && !SPMDDevice) {
         Builder.LoopVectorize = true;
         Builder.SLPVectorize = true;
+        Builder.DisableUnrollLoops = true;
       } else {
         Builder.LoopVectorize = false;
         Builder.SLPVectorize = false;
