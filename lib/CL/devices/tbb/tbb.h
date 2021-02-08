@@ -1,6 +1,6 @@
 /* OpenCL device using the Intel TBB library (derived from the pthread device).
 
-   Copyright (c) 2011 Universidad Rey Juan Carlos
+   Copyright (c) 2011-2020 pocl developers
    
    Permission is hereby granted, free of charge, to any person obtaining a copy
    of this software and associated documentation files (the "Software"), to deal
