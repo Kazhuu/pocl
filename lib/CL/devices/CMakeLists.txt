@@ -66,11 +66,12 @@ if(ENABLE_CUDA)
 endif()
 
 set(POCL_DEVICES_SOURCES
-  devices.h  devices.c
-  bufalloc.c
+  devices.h devices.c
+  bufalloc.h bufalloc.c
   common.h common.c
+  common_utils.h common_utils.c
   pocl_local_size.h pocl_local_size.c
-  bufalloc.h  cpuinfo.c cpuinfo.h)
+  cpuinfo.c cpuinfo.h)
 
 if(MSVC)
   set_source_files_properties( ${POCL_DEVICES_SOURCES} PROPERTIES LANGUAGE CXX )
