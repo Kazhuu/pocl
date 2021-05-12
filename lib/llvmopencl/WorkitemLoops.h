@@ -62,7 +62,6 @@ namespace pocl {
     typedef std::map<std::string, llvm::Instruction*> StrInstructionMap;
 
     llvm::DominatorTree *DT;
-    llvm::LoopInfoWrapperPass *LI;
 
     llvm::PostDominatorTreeWrapperPass *PDT;
 
@@ -72,8 +71,9 @@ namespace pocl {
 
     StrInstructionMap contextArrays;
 
-    virtual bool ProcessFunction(llvm::Function &F);
+    virtual bool ProcessFunction(llvm::Function &F, llvm::LoopInfo *LI);
 
+    llvm::Value *AddCodeToSelectSmallerBound(llvm::BasicBlock &InsertBlock, llvm::Value *EarlyExitVariable, llvm::Value *OriginalVariable);
     void FixMultiRegionVariables(ParallelRegion *region);
     void AddContextSaveRestore(llvm::Instruction *instruction);
     void releaseParallelRegions();
@@ -94,7 +94,7 @@ namespace pocl {
     CreateLoopAround
         (ParallelRegion &region, llvm::BasicBlock *entryBB, llvm::BasicBlock *exitBB, 
          bool peeledFirst, llvm::Value *localIdVar, size_t LocalSizeForDim,
-         bool addIncBlock=true, llvm::Value *DynamicLocalSize=NULL);
+         bool forceVectorization, bool addIncBlock=true, llvm::Value *DynamicLocalSize=NULL);
 
     llvm::BasicBlock *
       AppendIncBlock

@@ -227,6 +227,7 @@ kernel_compiler_passes(cl_device_id device, llvm::Module *input,
   passes.push_back("mem2reg");
   passes.push_back("domtree");
   passes.push_back("automatic-locals");
+  //passes.emplace_back("transform-fmuladd-intrinsic");
 
   if (SPMDDevice) {
     passes.push_back("flatten-inline-all");
@@ -315,6 +316,7 @@ kernel_compiler_passes(cl_device_id device, llvm::Module *input,
       if (currentWgMethod == "loopvec" && !SPMDDevice) {
         Builder.LoopVectorize = true;
         Builder.SLPVectorize = true;
+        Builder.DisableUnrollLoops = true;
       } else {
         Builder.LoopVectorize = false;
         Builder.SLPVectorize = false;
