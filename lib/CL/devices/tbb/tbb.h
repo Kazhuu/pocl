@@ -1,6 +1,6 @@
-/* pocl_topology.h - retrieving the topology of OpenCL devices
+/* OpenCL device using the Intel TBB library (derived from the pthread device).
 
-   Copyright (c) 2012 Cyril Roelandt and Pekka Jääskeläinen
+   Copyright (c) 2011-2020 pocl developers
    
    Permission is hereby granted, free of charge, to any person obtaining a copy
    of this software and associated documentation files (the "Software"), to deal
@@ -21,27 +21,26 @@
    THE SOFTWARE.
 */
 
-/**
- * Functionality for using the hwloc library for automatically detecting
- * the device characteristics and filling the info to the device structure to
- * make the info accessible to the clGetDeviceInfo() etc.
- *
- * http://www.open-mpi.org/projects/hwloc/
- */
-#ifndef POCL_TOPOLOGY_H
-#define POCL_TOPOLOGY_H
+#ifndef POCL_TBB_H
+#define POCL_TBB_H
 
+#include "config.h"
 #include "pocl_cl.h"
+#include "pocl_icd.h"
 
 #ifdef __cplusplus
-extern "C" {
+extern "C"
+{
 #endif
 
-POCL_EXPORT
-int pocl_topology_detect_device_info(cl_device_id device);
+#include "prototypes.inc"
+GEN_PROTOTYPES (tbb)
+
+#include "prototypes.inc"
+GEN_PROTOTYPES (pthread)
 
 #ifdef __cplusplus
 }
 #endif
 
-#endif /* POCL_TOPOLOGY_H */
+#endif /* POCL_TBB_H */

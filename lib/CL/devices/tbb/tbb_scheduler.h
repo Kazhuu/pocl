@@ -1,6 +1,6 @@
-/* pocl_topology.h - retrieving the topology of OpenCL devices
+/* OpenCL device using the Intel TBB library (derived from the pthread device).
 
-   Copyright (c) 2012 Cyril Roelandt and Pekka Jääskeläinen
+   Copyright (c) 2015 Ville Korhonen, Tampere University of Technology
    
    Permission is hereby granted, free of charge, to any person obtaining a copy
    of this software and associated documentation files (the "Software"), to deal
@@ -21,27 +21,26 @@
    THE SOFTWARE.
 */
 
-/**
- * Functionality for using the hwloc library for automatically detecting
- * the device characteristics and filling the info to the device structure to
- * make the info accessible to the clGetDeviceInfo() etc.
- *
- * http://www.open-mpi.org/projects/hwloc/
- */
-#ifndef POCL_TOPOLOGY_H
-#define POCL_TOPOLOGY_H
+#ifndef POCL_TBB_SCHEDULER_H
+#define POCL_TBB_SCHEDULER_H
 
+#include "common_utils.h"
 #include "pocl_cl.h"
 
-#ifdef __cplusplus
-extern "C" {
+#ifdef __GNUC__
+#pragma GCC visibility push(hidden)
 #endif
 
-POCL_EXPORT
-int pocl_topology_detect_device_info(cl_device_id device);
+/* Initializes scheduler. Must be called before any kernel enqueue */
+void tbb_scheduler_init (cl_device_id device);
 
-#ifdef __cplusplus
-}
+void tbb_scheduler_uninit ();
+
+/* Gives ready-to-execute command for scheduler */
+void tbb_scheduler_push_command (_cl_command_node *cmd);
+
+#ifdef __GNUC__
+#pragma GCC visibility pop
 #endif
 
-#endif /* POCL_TOPOLOGY_H */
+#endif

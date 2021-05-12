@@ -24,13 +24,13 @@
 
 #define _GNU_SOURCE
 #define __USE_GNU
-#include <sched.h>
 
 #include <assert.h>
+#include <errno.h>
 #include <pthread.h>
+#include <sched.h>
 #include <string.h>
 #include <stdlib.h>
-#include <errno.h>
 
 #ifndef _MSC_VER
 #  include <unistd.h>
@@ -38,18 +38,17 @@
 #  include "vccompat.hpp"
 #endif
 
-#include "config.h"
-#include "utlist.h"
-#include "pocl-pthread.h"
-#include "pocl-pthread_utils.h"
-#include "pocl-pthread_scheduler.h"
-#include "pocl_runtime_config.h"
-#include "cpuinfo.h"
-#include "topology/pocl_topology.h"
 #include "common.h"
+#include "common_utils.h"
+#include "config.h"
+#include "cpuinfo.h"
 #include "devices.h"
-#include "pocl_util.h"
 #include "pocl_mem_management.h"
+#include "pocl_runtime_config.h"
+#include "pocl_util.h"
+#include "pocl-pthread.h"
+#include "pocl-pthread_scheduler.h"
+#include "topology/pocl_topology.h"
 
 #ifndef HAVE_LIBDL
 #error Pthread driver requires DL library
@@ -95,24 +94,9 @@ pocl_pthread_init_device_ops(struct pocl_device_ops *ops)
   ops->notify_cmdq_finished = pocl_pthread_notify_cmdq_finished;
   ops->update_event = pocl_pthread_update_event;
   ops->free_event_data = pocl_pthread_free_event_data;
-  ops->build_hash = pocl_pthread_build_hash;
 
   ops->init_queue = pocl_pthread_init_queue;
   ops->free_queue = pocl_pthread_free_queue;
-}
-
-char *
-pocl_pthread_build_hash (cl_device_id device)
-{
-  char* res = calloc(1000, sizeof(char));
-#ifdef KERNELLIB_HOST_DISTRO_VARIANTS
-  char *name = get_llvm_cpu_name ();
-  snprintf (res, 1000, "pthread-%s-%s", HOST_DEVICE_BUILD_HASH, name);
-  POCL_MEM_FREE (name);
-#else
-  snprintf (res, 1000, "pthread-%s", HOST_DEVICE_BUILD_HASH);
-#endif
-  return res;
 }
 
 unsigned int
