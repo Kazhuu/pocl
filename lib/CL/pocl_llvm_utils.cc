@@ -65,6 +65,7 @@ using namespace llvm;
 
 #include <string>
 #include <map>
+#include <iostream>
 
 llvm::Module *parseModuleIR(const char *path) {
   SMDiagnostic Err;
@@ -308,6 +309,11 @@ void InitializeLLVM() {
 
   currentWgMethod = pocl_get_string_option("POCL_WORK_GROUP_METHOD", "loopvec");
 
+  //auto print = [](const StringMapEntry<llvm::cl::Option*>& opt){
+    //std::cout << opt.getValue()->ArgStr.str() << std::endl;
+  //};
+  //std::for_each(opts.begin(), opts.end(), print);
+
   if (currentWgMethod == "loopvec") {
 
     O = opts["scalarize-load-store"];
@@ -337,6 +343,31 @@ void InitializeLLVM() {
     assert(O && "could not find LLVM option 'jump-threading-implication-search-threshold'");
     O->addOccurrence(1, StringRef("jump-threading-implication-search-threshold"), StringRef("0"),
                      false);
+
+    // Disable loop unswitch from bloating the code.
+    O = opts["loop-unswitch-threshold"];
+    assert(O && "could not find LLVM option 'loop-unswitch-threshold'");
+    O->addOccurrence(1, StringRef("loop-unswitch-threshold"), StringRef("0"),
+                     false);
+    O = opts["loop-unswitch-memoryssa-threshold"];
+    assert(O && "could not find LLVM option 'loop-unswitch-memoryssa-threshold'");
+    O->addOccurrence(1, StringRef("loop-unswitch-memoryssa-threshold"), StringRef("0"),
+                     false);
+
+    //O = opts["enable-loopinterchange"];
+    //assert(O && "could not find LLVM option 'enable-loopinterchange'");
+    //O->addOccurrence(1, StringRef("enable-loopinterchange"),
+                     //StringRef("1"), false);
+
+    O = opts["enable-vplan-native-path"];
+    assert(O && "could not find LLVM option 'enable-vplan-native-path'");
+    O->addOccurrence(1, StringRef("enable-vplan-native-path"),
+                     StringRef("1"), false);
+
+    //O = opts["vplan-build-stress-test"];
+    //assert(O && "could not find LLVM option 'vplan-build-stress-test'");
+    //O->addOccurrence(1, StringRef("vplan-build-stress-test"),
+                     //StringRef("1"), false);
 
     if (pocl_get_bool_option("POCL_VECTORIZER_REMARKS", 0) == 1) {
       // Enable diagnostics from the loop vectorizer.

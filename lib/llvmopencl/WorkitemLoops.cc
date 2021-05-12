@@ -53,6 +53,7 @@ IGNORE_COMPILER_WARNING("-Wunused-parameter")
 #include "Barrier.h"
 #include "Kernel.h"
 #include "WorkitemHandlerChooser.h"
+#include "ParallelRegionAnalysis.h"
 
 //#define DUMP_CFGS
 
@@ -103,7 +104,7 @@ WorkitemLoops::runOnFunction(Function &F)
 
   DTP = &getAnalysis<DominatorTreeWrapperPass>();
   DT = &DTP->getDomTree();
-  LI = &getAnalysis<LoopInfoWrapperPass>();
+  auto *LI = &getAnalysis<LoopInfoWrapperPass>().getLoopInfo();
 
   PDT = &getAnalysis<PostDominatorTreeWrapperPass>();
 
@@ -111,7 +112,7 @@ WorkitemLoops::runOnFunction(Function &F)
 
 //  F.viewCFGOnly();
 
-  bool changed = ProcessFunction(F);
+  bool changed = ProcessFunction(F, LI);
 
 #ifdef DUMP_CFGS
   dumpCFG(F, F.getName().str() + "_after_wiloops.dot", 
@@ -143,7 +144,7 @@ WorkitemLoops::CreateLoopAround
 (ParallelRegion &region,
  llvm::BasicBlock *entryBB, llvm::BasicBlock *exitBB,
  bool peeledFirst, llvm::Value *localIdVar, size_t LocalSizeForDim,
- bool addIncBlock, llvm::Value *DynamicLocalSize)
+ bool forceVectorization, bool addIncBlock, llvm::Value *DynamicLocalSize)
 {
   assert (localIdVar != NULL);
 
@@ -234,6 +235,7 @@ WorkitemLoops::CreateLoopAround
     llvm::pred_begin(entryBB), 
     E = llvm::pred_end(entryBB);
 
+  // Collect entry block predecessors to the list.
   for (; PI != E; ++PI)
     {
       llvm::BasicBlock *bb = *PI;
@@ -252,6 +254,22 @@ WorkitemLoops::CreateLoopAround
     }
 
   IRBuilder<> builder(forInitBB);
+
+  // Test if DynamicLocalSize variable is not a pointer type. If it's not then
+  // work-item loop bound is coming from kernel parameter instead. Pointer is
+  // required because other local size variables are pointers. These however get
+  // cleaned up later by LLVM.
+  // TODO: Add other parameter to this function instead of using same for
+  // different purpose.
+  bool useBoundFromParameter = false;
+  if (DynamicLocalSize && !dyn_cast<PointerType>(DynamicLocalSize->getType())) {
+    // Allocate space on stack and store parameter value there. This is required
+    // because we need a pointer type, not just value.
+    Value *localX = builder.CreateAlloca(DynamicLocalSize->getType());
+    builder.CreateStore(DynamicLocalSize, localX);
+    DynamicLocalSize = localX;
+    useBoundFromParameter = true;
+  }
 
   if (peeledFirst) {
     builder.CreateStore(builder.CreateLoad(localIdXFirstVar), localIdVar);
@@ -281,15 +299,17 @@ WorkitemLoops::CreateLoopAround
   builder.SetInsertPoint(forCondBB);
 
   llvm::Value *cmpResult;
-  if (!WGDynamicLocalSize)
-    cmpResult = builder.CreateICmpULT(
-                  builder.CreateLoad(localIdVar),
-                    ConstantInt::get(SizeT, LocalSizeForDim));
-  else
+  if (WGDynamicLocalSize || useBoundFromParameter) {
+    assert(DynamicLocalSize && "DynamicLocalSize parameter cannot be nullptr");
     cmpResult = builder.CreateICmpULT(
                   builder.CreateLoad(localIdVar),
                     builder.CreateLoad(DynamicLocalSize));
-  
+  } else {
+    cmpResult = builder.CreateICmpULT(
+                  builder.CreateLoad(localIdVar),
+                    ConstantInt::get(SizeT, LocalSizeForDim));
+  }
+
   Instruction *loopBranch =
       builder.CreateCondBr(cmpResult, loopBodyEntryBB, loopEndBB);
 
@@ -307,8 +327,17 @@ WorkitemLoops::CreateLoopAround
   MDNode *AccessGroupMD = MDNode::getDistinct(C, {});
   MDNode *ParallelAccessMD = MDNode::get(
       C, {MDString::get(C, "llvm.loop.parallel_accesses"), AccessGroupMD});
+  ArrayRef<Metadata*> loopMD;
+  if (forceVectorization) {
+    Metadata* EnabledValue = llvm::ConstantAsMetadata::get(
+          ConstantInt::get(Type::getInt1Ty(C), 1));
+    MDNode *VectorizeEnableMD = MDNode::get(C, {MDString::get(C, "llvm.loop.vectorize.enable"), EnabledValue});
+    loopMD = {Dummy, ParallelAccessMD, VectorizeEnableMD};
+  } else {
+    loopMD = {Dummy, ParallelAccessMD};
+  }
+  MDNode *Root = MDNode::get(C, loopMD);
 
-  MDNode *Root = MDNode::get(C, {Dummy, ParallelAccessMD});
 #endif
 
   // At this point we have
@@ -369,11 +398,16 @@ void WorkitemLoops::releaseParallelRegions() {
 }
 
 bool
-WorkitemLoops::ProcessFunction(Function &F)
+WorkitemLoops::ProcessFunction(Function &F, LoopInfo *LI)
 {
   Kernel *K = cast<Kernel> (&F);
   
   llvm::Module *M = K->getParent();
+  bool KernelContainLoops = !LI->getTopLevelLoops().empty();
+  if (KernelContainLoops)
+    llvm::errs() << "kernel contain loops, using VPlan\n";
+  else
+    llvm::errs() << "kernel does not contain loops, using ILV\n";
 
   Initialize(K);
   unsigned workItemCount = WGLocalSizeX*WGLocalSizeY*WGLocalSizeZ;
@@ -387,7 +421,7 @@ WorkitemLoops::ProcessFunction(Function &F)
 
   releaseParallelRegions();
 
-  original_parallel_regions = K->getParallelRegions(&LI->getLoopInfo());
+  original_parallel_regions = K->getParallelRegions(LI);
 
 #ifdef DUMP_CFGS
   F.dump();
@@ -546,17 +580,23 @@ WorkitemLoops::ProcessFunction(Function &F)
         }
       }
 
+    ParallelRegionAnalysis prAnalysis(original, DT, &PDT->getPostDomTree());
+
     if (WGDynamicLocalSize) {
-      GlobalVariable *gv;
+      Value *gv;
       gv = M->getGlobalVariable("_local_size_x");
       if (gv == NULL)
         gv = new GlobalVariable(*M, SizeT, true, GlobalValue::CommonLinkage,
                                 NULL, "_local_size_x", NULL,
                                 GlobalValue::ThreadLocalMode::NotThreadLocal,
                                 0, true);
-
+      Value *xUpperBound = prAnalysis.getXDimensionUpperBound();
+      if (xUpperBound) {
+        prAnalysis.removeXUpperBound();
+        xUpperBound = AddCodeToSelectSmallerBound(F.getEntryBlock(), xUpperBound, gv);
+      }
       l = CreateLoopAround(*original, l.first, l.second, peelFirst,
-                           LocalIdXGlobal, WGLocalSizeX, !unrolled, gv);
+                           LocalIdXGlobal, WGLocalSizeX, KernelContainLoops, !unrolled, xUpperBound);
 
       gv = M->getGlobalVariable("_local_size_y");
       if (gv == NULL)
@@ -564,7 +604,7 @@ WorkitemLoops::ProcessFunction(Function &F)
                                 NULL, "_local_size_y");
 
       l = CreateLoopAround(*original, l.first, l.second,
-                           false, LocalIdYGlobal, WGLocalSizeY, !unrolled, gv);
+                           false, LocalIdYGlobal, WGLocalSizeY, false, !unrolled, gv);
 
       gv = M->getGlobalVariable("_local_size_z");
       if (gv == NULL)
@@ -574,22 +614,34 @@ WorkitemLoops::ProcessFunction(Function &F)
                                 0, true);
 
       l = CreateLoopAround(*original, l.first, l.second,
-                           false, LocalIdZGlobal, WGLocalSizeZ, !unrolled, gv);
+                           false, LocalIdZGlobal, WGLocalSizeZ, false, !unrolled, gv);
 
     } else {
       if (WGLocalSizeX > 1) {
+        Value *xUpperBound = prAnalysis.getXDimensionUpperBound();
+        if (xUpperBound) {
+          Value *FixedLocalSizeX = ConstantInt::get(SizeT, WGLocalSizeX);
+          xUpperBound = AddCodeToSelectSmallerBound(F.getEntryBlock(), xUpperBound, FixedLocalSizeX);
+          prAnalysis.removeXUpperBound();
+        }
         l = CreateLoopAround(*original, l.first, l.second, peelFirst,
-                             LocalIdXGlobal, WGLocalSizeX, !unrolled);
+                             LocalIdXGlobal, WGLocalSizeX, KernelContainLoops, !unrolled, xUpperBound);
       }
 
       if (WGLocalSizeY > 1) {
+        Value *yUpperBound = prAnalysis.getYDimensionUpperBound();
+        if (yUpperBound) {
+          Value *FixedLocalSizeY = ConstantInt::get(SizeT, WGLocalSizeY);
+          yUpperBound = AddCodeToSelectSmallerBound(F.getEntryBlock(), yUpperBound, FixedLocalSizeY);
+          prAnalysis.removeYUpperBound();
+        }
         l = CreateLoopAround(*original, l.first, l.second, false,
-                             LocalIdYGlobal, WGLocalSizeY);
+                             LocalIdYGlobal, WGLocalSizeY, false, true, yUpperBound);
       }
 
       if (WGLocalSizeZ > 1) {
         l = CreateLoopAround(*original, l.first, l.second, false,
-                             LocalIdZGlobal, WGLocalSizeZ);
+                             LocalIdZGlobal, WGLocalSizeZ, false);
       }
     }
 
@@ -636,6 +688,21 @@ WorkitemLoops::ProcessFunction(Function &F)
 #endif
 
   return true;
+}
+
+Value *WorkitemLoops::AddCodeToSelectSmallerBound(llvm::BasicBlock &InsertBlock, llvm::Value *EarlyExitVariable, llvm::Value *OriginalVariable) {
+  IRBuilder<> builder(InsertBlock.getTerminator());
+  LLVMContext &C = OriginalVariable->getContext();
+  // Extend variable to same size as variable holding the work-item
+  // count size if not already.
+  if (EarlyExitVariable->getType()->getScalarSizeInBits() != SizeTWidth) {
+    EarlyExitVariable = builder.CreateSExt(EarlyExitVariable, IntegerType::get(C, SizeTWidth));
+  }
+  if (OriginalVariable->getType()->isPointerTy()) {
+    OriginalVariable = builder.CreateLoad(OriginalVariable);
+  }
+  Value *EarlyExitSmallerCond = builder.CreateICmpSLT(EarlyExitVariable, OriginalVariable);
+  return builder.CreateSelect(EarlyExitSmallerCond, EarlyExitVariable, OriginalVariable);
 }
 
 /*

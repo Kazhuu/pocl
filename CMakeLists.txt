@@ -28,6 +28,8 @@ cmake_minimum_required(VERSION 3.3 FATAL_ERROR)
 project(pocl)
 set(CMAKE_PROJECT_DESCRIPTION "pocl is a portable OpenCl runtime.")
 
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
 set(LATEST_KNOWN_CXX_STD_VERSION "20")
 set(SUPPORTED_CXX_STD_VERSION "11")
 
