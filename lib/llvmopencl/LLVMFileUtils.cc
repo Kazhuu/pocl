@@ -71,10 +71,18 @@ POP_COMPILER_DIAGS
 
 #define RETURN_IF_EC if (ec) return ec.default_error_condition().value()
 #define OPEN_FOR_READ ec = sys::fs::openFileForRead(p, fd)
+#ifdef LLVM_OLDER_THAN_13_0
 #define CREATE_UNIQUE_FILE(S)                                                  \
   ec = sys::fs::createUniqueFile((p + S), fd, TmpPath,                         \
                                  sys::fs::perms::owner_read |                  \
                                      sys::fs::perms::owner_write);
+#else
+#define CREATE_UNIQUE_FILE(S)                                                  \
+  ec = sys::fs::createUniqueFile((p + S), fd, TmpPath,                         \
+                                llvm::sys::fs::OF_None,                        \
+                                 sys::fs::perms::owner_read |                  \
+                                     sys::fs::perms::owner_write);
+#endif
 
 #ifdef LLVM_OLDER_THAN_7_0
 #define OPEN_CREATE ec = sys::fs::openFileForWrite(p, fd, sys::fs::F_RW)
