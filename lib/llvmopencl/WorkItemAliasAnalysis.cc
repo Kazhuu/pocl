@@ -144,6 +144,13 @@ WorkItemAliasAnalysis::getAnalysisUsage(AnalysisUsage &AU) const {
     AU.addRequired<TargetLibraryInfoWrapperPass>();
 }
 
+#ifdef LLVM_OLDER_THAN_13_0
+#define NO_ALIAS NoAlias
+#else
+//#define NO_ALIAS NoAlias
+#define NO_ALIAS AliasResult::Kind::NoAlias
+#endif
+
 /**
  * Test if memory locations are from different work items from same region.
  * Then they can not alias.
@@ -155,12 +162,12 @@ WorkItemAAResult::alias(const Location &LocA, const Location &LocB) {
     // pointer values are. This allows the code below to ignore this special
     // case.
     if (LocA.Size == 0 || LocB.Size == 0)
-        return NoAlias;
+        return NO_ALIAS;
 
     // Pointers from different address spaces do not alias
     if (cast<PointerType>(LocA.Ptr->getType())->getAddressSpace() != 
         cast<PointerType>(LocB.Ptr->getType())->getAddressSpace()) {
-        return NoAlias;
+        return NO_ALIAS;
     }
     // In case code is created by pocl, we can also use metadata.
     if (isa<Instruction>(LocA.Ptr) && isa<Instruction>(LocB.Ptr)) {
@@ -217,7 +224,7 @@ WorkItemAAResult::alias(const Location &LocA, const Location &LocB) {
                 if ( !(CIX->getValue() == CJX->getValue()
                     && CIY->getValue() == CJY->getValue()
                     && CIZ->getValue() == CJZ->getValue())) {
-                    return NoAlias;
+                    return NO_ALIAS;
                 }                
             }        
         }
